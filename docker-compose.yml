@@ -1,7 +1,7 @@
 services:
   status:
     image: docker.mokkagnom.de/docker-status
-    name: docker-status
+    container_name: docker-status
     restart: unless-stopped
     ports:
       - "42679:42679"
