@@ -1,0 +1,11 @@
+services:
+  status:
+    image: docker.mokkagnom.de/docker-status
+    name: docker-status
+    restart: unless-stopped
+    ports:
+      - "42679:42679"
+    environment:
+      DOCKER_HTTP_CHECKS: "{}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
