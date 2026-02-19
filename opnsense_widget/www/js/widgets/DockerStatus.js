@@ -10,6 +10,7 @@ export default class DockerStatus extends BaseWidget {
         this.refreshSeconds = 30;
         this.lastUpdate = 0;
         this.loading = false;
+        this.loadToken = 0;
     }
 
     getMarkup() {
@@ -57,6 +58,15 @@ export default class DockerStatus extends BaseWidget {
         await this._loadData(true);
     }
 
+    async getWidgetConfig() {
+        const config = this.config.widget || {};
+        const refresh = parseInt(config.refresh_seconds, 10);
+        return {
+            servers_text: config.servers_text || '',
+            refresh_seconds: Number.isFinite(refresh) && refresh >= 5 ? refresh : 30
+        };
+    }
+
     async onWidgetTick() {
         if (this.loading) {
             return;
@@ -74,6 +84,7 @@ export default class DockerStatus extends BaseWidget {
         const refresh = parseInt(config.refresh_seconds, 10);
 
         this.refreshSeconds = Number.isFinite(refresh) && refresh >= 5 ? refresh : 30;
+        this.timeoutPeriod = Math.floor((this.refreshSeconds * 1000) / 2);
 
         const root = this._root();
         root.find('.ds-servers').val(serversText);
@@ -99,6 +110,7 @@ export default class DockerStatus extends BaseWidget {
             });
 
             this.refreshSeconds = refreshSeconds;
+            this.timeoutPeriod = Math.floor((this.refreshSeconds * 1000) / 2);
             this.lastUpdate = 0;
 
             root.find('.ds-save-status').text(this.translations.saved || 'Saved. Click Save to persist.');
@@ -124,34 +136,68 @@ export default class DockerStatus extends BaseWidget {
         }
 
         this.loading = true;
-        root.find('.ds-content').html(`<div class="ds-muted">${this.translations.loading || 'Loading...'}</div>`);
-
-        const results = await Promise.all(servers.map(async (server) => {
-            try {
-                const payload = await this.ajaxCall(`/api/dockerstatus/status/containers?host=${encodeURIComponent(server.host)}`);
-                if (payload && payload.result === 'ok' && Array.isArray(payload.data)) {
-                    return { server, ok: true, data: payload.data };
-                }
-                return { server, ok: false, error: payload && payload.message ? payload.message : 'error' };
-            } catch (error) {
-                const message = error && (error.textStatus || error.errorThrown) ? (error.textStatus || error.errorThrown) : 'error';
-                return { server, ok: false, error: message };
-            }
-        }));
+        const currentToken = ++this.loadToken;
+        const timeoutMs = Math.max(1000, this.timeoutPeriod || 0);
 
         let html = '';
-        results.forEach((result) => {
-            if (result.ok) {
-                html += this._renderServer(result.server, result.data);
-            } else {
-                html += this._renderError(result.server, result.error);
+        servers.forEach((server, index) => {
+            html += `
+                <div class="ds-server" id="${this._serverId(index)}">
+                    <h5>${this._escape(server.name)}</h5>
+                    <div class="ds-muted">${this.translations.loading || 'Loading...'}</div>
+                </div>
+            `;
+        });
+        root.find('.ds-content').html(html);
+
+        const requestState = { pending: servers.length, completed: 0 };
+        servers.forEach(async (server, index) => {
+            try {
+                const payload = await this.ajaxCall(`/api/dockerstatus/status/containers?host=${encodeURIComponent(server.host)}&timeout_ms=${timeoutMs}`);
+                if (this.loadToken !== currentToken) {
+                    return;
+                }
+                if (payload && payload.result === 'ok' && Array.isArray(payload.data)) {
+                    this._renderServerInto(index, server, payload.data);
+                } else {
+                    this._renderErrorInto(index, server, payload && payload.message ? payload.message : 'error');
+                }
+            } catch (error) {
+                if (this.loadToken !== currentToken) {
+                    return;
+                }
+                const message = error && (error.textStatus || error.errorThrown) ? (error.textStatus || error.errorThrown) : 'error';
+                this._renderErrorInto(index, server, message);
+            } finally {
+                if (this.loadToken !== currentToken) {
+                    return;
+                }
+                requestState.completed += 1;
+                if (requestState.completed >= requestState.pending) {
+                    this.lastUpdate = Date.now();
+                    this.loading = false;
+                }
             }
         });
+    }
 
-        root.find('.ds-content').html(html);
-        this.lastUpdate = Date.now();
-        this.loading = false;
+    _renderServerInto(index, server, data) {
+        const root = this._root();
+        root.find(`#${this._serverId(index)}`).replaceWith(this._renderServer(server, data));
+        this._updateGridIfNeeded();
+    }
 
+    _renderErrorInto(index, server, error) {
+        const root = this._root();
+        root.find(`#${this._serverId(index)}`).replaceWith(this._renderError(server, error));
+        this._updateGridIfNeeded();
+    }
+
+    _serverId(index) {
+        return `dockerstatus-${this.id}-server-${index}`;
+    }
+
+    _updateGridIfNeeded() {
         if (this.config && this.config.callbacks && this.config.callbacks.updateGrid) {
             this.config.callbacks.updateGrid();
         }

@@ -1,4 +1,4 @@
-from http.server import HTTPServer
+from http.server import ThreadingHTTPServer
 import json
 import os
 from src.docker_status import DockerStatus
@@ -16,7 +16,7 @@ except json.JSONDecodeError:
 
 
 def main():
-    server = HTTPServer((HTTP_HOST, HTTP_PORT), HealthcheckHandler)
+    server = ThreadingHTTPServer((HTTP_HOST, HTTP_PORT), HealthcheckHandler)
     server.docker_status = DockerStatus(DOCKER_HTTP_CHECKS)
     print(f"Docker-Status-Server running on http://{HTTP_HOST}:{HTTP_PORT}/")
     try:

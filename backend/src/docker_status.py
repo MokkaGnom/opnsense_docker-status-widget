@@ -1,4 +1,7 @@
-import docker, requests, datetime
+import concurrent.futures
+import datetime
+import docker
+import requests
 
 
 def calculate_cpu_percent(stats):
@@ -26,12 +29,13 @@ class DockerStatus:
     def __init__(self, http_checks: dict[str, str] = dict()):
         self.docker_client: docker.DockerClient = docker.from_env()
         self.http_checks: dict[str, str] = http_checks
+        self._http_session = requests.Session()
 
     def _http_healthcheck(self, name) -> tuple[str, str]:
         if name not in self.http_checks:
             return "-", ""
         try:
-            r = requests.get(self.http_checks[name], timeout=2)
+            r = self._http_session.get(self.http_checks[name], timeout=(1, 2))
             if r.status_code == 200:
                 return "HTTP OK", "healthy"
             return f"HTTP {r.status_code}", "unhealthy"
@@ -39,13 +43,17 @@ class DockerStatus:
             return "HTTP FAIL", "unhealthy"
         
     def get_container_data(self) -> list:
-        container_data = []
-        for c in self.docker_client.containers.list(all=True):
+        containers = self.docker_client.containers.list(all=True)
+        if not containers:
+            return []
+
+        def _build_container_data(c) -> dict:
             stats = {}
             cpu = 0
             mem = 0
+            is_running = c.status == "running"
 
-            if c.status == "running":
+            if is_running:
                 try:
                     stats = c.stats(stream=False)
                     cpu = calculate_cpu_percent(stats)
@@ -53,16 +61,20 @@ class DockerStatus:
                 except:
                     pass
 
-            started = c.attrs["State"].get("StartedAt")
+            attrs = c.attrs
+            started = attrs["State"].get("StartedAt")
             uptime = "-"
-            if started and c.status == "running":
+            if started and is_running:
                 dt = datetime.datetime.fromisoformat(started.replace("Z", "+00:00"))
                 uptime = str(datetime.datetime.now(datetime.timezone.utc) - dt).split(".")[0]
 
-            docker_health = c.attrs["State"].get("Health", {})
+            docker_health = attrs["State"].get("Health", {})
             docker_health_status = docker_health.get("Status", "-")
 
-            http_health, http_class = self._http_healthcheck(c.name)
+            if is_running:
+                http_health, http_class = self._http_healthcheck(c.name)
+            else:
+                http_health, http_class = "-", ""
 
             health_display = docker_health_status
             health_class = docker_health_status
@@ -71,16 +83,17 @@ class DockerStatus:
                 health_display = http_health
                 health_class = http_class
 
-            container_data.append(
-                {
-                    "name": c.name,
-                    "status": c.status,
-                    "uptime": uptime,
-                    "cpu": cpu,
-                    "mem": mem,
-                    "restarts": c.attrs["RestartCount"],
-                    "health": health_display,
-                    "health_class": health_class,
-                }
-            )
-        return container_data
+            return {
+                "name": c.name,
+                "status": c.status,
+                "uptime": uptime,
+                "cpu": cpu,
+                "mem": mem,
+                "restarts": attrs["RestartCount"],
+                "health": health_display,
+                "health_class": health_class,
+            }
+
+        max_workers = min(8, len(containers))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            return list(executor.map(_build_container_data, containers))

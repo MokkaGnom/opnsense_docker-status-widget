@@ -50,12 +50,20 @@ class StatusController extends ApiControllerBase
         return 'http://' . $host . '/';
     }
 
-    private function fetchJson($url)
+    private function fetchJson($url, $timeoutMs)
     {
+        $timeoutMs = (int)$timeoutMs;
+        if ($timeoutMs <= 0) {
+            $timeoutMs = 4000;
+        }
+        $timeoutMs = max(1000, min($timeoutMs, 30000));
+        $timeoutSec = (int)ceil($timeoutMs / 1000);
+        $connectTimeout = max(1, min(2, $timeoutSec));
+
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 4);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeoutSec);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $connectTimeout);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/json']);
         $body = curl_exec($ch);
         $error = curl_error($ch);
@@ -81,11 +89,12 @@ class StatusController extends ApiControllerBase
     public function containersAction()
     {
         $host = $this->request->getQuery('host', 'string', '');
+        $timeoutMs = $this->request->getQuery('timeout_ms', 'int', 0);
         $url = $this->buildUrl($host);
         if ($url === null) {
             return ['result' => 'failed', 'message' => 'invalid host'];
         }
 
-        return $this->fetchJson($url);
+        return $this->fetchJson($url, $timeoutMs);
     }
 }
