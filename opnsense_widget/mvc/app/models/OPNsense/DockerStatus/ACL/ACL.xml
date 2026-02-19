@@ -1,0 +1,9 @@
+<acl>
+    <page-services-dockerstatus>
+        <name>WebCfg - Services: Docker Status widget</name>
+        <description>Allow access to Docker Status widget data.</description>
+        <patterns>
+            <pattern>api/dockerstatus/status/*</pattern>
+        </patterns>
+    </page-services-dockerstatus>
+</acl>

@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'backend/**'
   workflow_dispatch:
 
 jobs:
-  build-and-push:
+  backend:
     name: Build & Push
     runs-on: ubuntu-latest
     steps:
@@ -21,8 +23,8 @@ jobs:
 
       - uses: docker/build-push-action@v6
         with:
-          context: ./
-          file: ./Dockerfile
+          context: ./backend
+          file: ./backend/Dockerfile
           push: true
           tags: |
             ${{ secrets.REGISTRY_URL }}/docker-status:latest

@@ -1,0 +1,25 @@
+<metadata>
+    <dockerstatus>
+        <filename>DockerStatus.js</filename>
+        <endpoints>
+            <endpoint>/api/dockerstatus/status/containers</endpoint>
+        </endpoints>
+        <translations>
+            <title>Docker Status</title>
+            <servers>Servers (one per line, format: name|host or host)</servers>
+            <refresh>Refresh (seconds)</refresh>
+            <save>Save</save>
+            <saved>Saved. Click Save to persist.</saved>
+            <loading>Loading...</loading>
+            <noservers>No servers configured.</noservers>
+            <nocontainers>No containers</nocontainers>
+            <name>Name</name>
+            <status>Status</status>
+            <uptime>Uptime</uptime>
+            <cpu>CPU</cpu>
+            <mem>Mem</mem>
+            <restarts>Restarts</restarts>
+            <health>Health</health>
+        </translations>
+    </dockerstatus>
+</metadata>
