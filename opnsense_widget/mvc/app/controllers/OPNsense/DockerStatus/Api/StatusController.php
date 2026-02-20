@@ -54,7 +54,7 @@ class StatusController extends ApiControllerBase
     {
         $timeoutMs = (int)$timeoutMs;
         if ($timeoutMs <= 0) {
-            $timeoutMs = 4000;
+            $timeoutMs = 1000;
         }
         $timeoutMs = max(1000, min($timeoutMs, 30000));
         $timeoutSec = (int)ceil($timeoutMs / 1000);

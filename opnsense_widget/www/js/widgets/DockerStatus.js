@@ -13,6 +13,8 @@ export default class DockerStatus extends BaseWidget {
         this.loadToken = 0;
     }
 
+    REQUEST_TIMEOUT_MULT = 0.9;
+
     getMarkup() {
         const id = this.id;
         return $(`
@@ -84,7 +86,7 @@ export default class DockerStatus extends BaseWidget {
         const refresh = parseInt(config.refresh_seconds, 10);
 
         this.refreshSeconds = Number.isFinite(refresh) && refresh >= 5 ? refresh : 30;
-        this.timeoutPeriod = Math.floor((this.refreshSeconds * 1000) / 2);
+        this.timeoutPeriod = Math.floor((this.refreshSeconds * 1000) * this.REQUEST_TIMEOUT_MULT);
 
         const root = this._root();
         root.find('.ds-servers').val(serversText);
@@ -110,7 +112,7 @@ export default class DockerStatus extends BaseWidget {
             });
 
             this.refreshSeconds = refreshSeconds;
-            this.timeoutPeriod = Math.floor((this.refreshSeconds * 1000) / 2);
+            this.timeoutPeriod = Math.floor((this.refreshSeconds * 1000) * this.REQUEST_TIMEOUT_MULT);
             this.lastUpdate = 0;
 
             root.find('.ds-save-status').text(this.translations.saved || 'Saved. Click Save to persist.');
@@ -131,6 +133,8 @@ export default class DockerStatus extends BaseWidget {
             return;
         }
 
+        root.find('.ds-content').removeClass('ds-muted').text('');
+
         if (!force && !this.dataChanged('servers', servers)) {
             // no server list changes, continue
         }
@@ -140,15 +144,22 @@ export default class DockerStatus extends BaseWidget {
         const timeoutMs = Math.max(1000, this.timeoutPeriod || 0);
 
         let html = '';
+        let needsRender = false;
         servers.forEach((server, index) => {
-            html += `
-                <div class="ds-server" id="${this._serverId(index)}">
-                    <h5>${this._escape(server.name)}</h5>
-                    <div class="ds-muted">${this.translations.loading || 'Loading...'}</div>
-                </div>
-            `;
+            const serverId = this._serverId(index);
+            if (root.find(`#${serverId}`).length === 0) {
+                needsRender = true;
+                html += `
+                    <div class="ds-server" id="${serverId}">
+                        <h5>${this._escape(server.name)}</h5>
+                        <div class="ds-muted"></div>
+                    </div>
+                `;
+            }
         });
-        root.find('.ds-content').html(html);
+        if (needsRender) {
+            root.find('.ds-content').append(html);
+        }
 
         const requestState = { pending: servers.length, completed: 0 };
         servers.forEach(async (server, index) => {
@@ -183,13 +194,13 @@ export default class DockerStatus extends BaseWidget {
 
     _renderServerInto(index, server, data) {
         const root = this._root();
-        root.find(`#${this._serverId(index)}`).replaceWith(this._renderServer(server, data));
+        root.find(`#${this._serverId(index)}`).replaceWith(this._renderServer(server, data, index));
         this._updateGridIfNeeded();
     }
 
     _renderErrorInto(index, server, error) {
         const root = this._root();
-        root.find(`#${this._serverId(index)}`).replaceWith(this._renderError(server, error));
+        root.find(`#${this._serverId(index)}`).replaceWith(this._renderError(server, error, index));
         this._updateGridIfNeeded();
     }
 
@@ -233,7 +244,8 @@ export default class DockerStatus extends BaseWidget {
         }).filter(Boolean);
     }
 
-    _renderServer(server, data) {
+    _renderServer(server, data, index = null) {
+        const serverId = index === null ? '' : ` id="${this._serverId(index)}"`;
         const rows = data.map((item) => {
             const statusClass = this._statusClass(item.status);
             const healthClass = this._healthClass(item.health_class || item.health);
@@ -267,7 +279,7 @@ export default class DockerStatus extends BaseWidget {
         const body = rows || `<tr><td colspan="7" class="ds-muted">${this.translations.nocontainers || 'No containers'}</td></tr>`;
 
         return `
-            <div class="ds-server">
+            <div class="ds-server"${serverId}>
                 <h5>${this._escape(server.name)}</h5>
                 <table>
                     ${header}
@@ -277,9 +289,10 @@ export default class DockerStatus extends BaseWidget {
         `;
     }
 
-    _renderError(server, error) {
+    _renderError(server, error, index = null) {
+        const serverId = index === null ? '' : ` id="${this._serverId(index)}"`;
         return `
-            <div class="ds-server">
+            <div class="ds-server"${serverId}>
                 <h5>${this._escape(server.name)}</h5>
                 <div class="ds-muted">${this._escape(error || 'error')}</div>
             </div>
