@@ -16,12 +16,6 @@ Then open Dashboard -> Add Widget and select "Docker Status".
 If your user is not admin, make sure it has the new ACL entry
 "WebCfg - Services: Docker Status widget".
 
-## Install (legacy PHP widgets)
-
-If you still use the legacy widget system, copy:
-
-- /usr/local/opnsense/www/widgets/widgets/docker_status.widget.php
-
 ## Configure
 
 - Open the widget settings.
