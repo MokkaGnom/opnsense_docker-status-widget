@@ -11,12 +11,13 @@ class HealthcheckHandler(BaseHTTPRequestHandler):
         
    
     def do_GET(self):
-        if self.path == "/self":
+        path = self.path.split('?')[0].lower().rstrip('/') or '/'
+        if path == "/self":
             response = {
             "status": "ok",
             "timestamp": datetime.now().isoformat() + "Z"
         }
-        elif self.path == "/":
+        elif path == "/" or path == "/docker":
             response = self._get_docker_status(self.server.docker_status)    
         else:
             self.send_response(404)
